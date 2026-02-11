@@ -1,76 +1,87 @@
-"""
-This module takes care of starting the API Server, Loading the DB and Adding the endpoints
-"""
 import os
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, url_for
 from flask_cors import CORS
 from utils import APIException, generate_sitemap
 from datastructures import FamilyStructure
+
 
 app = Flask(__name__)
 app.url_map.strict_slashes = False
 CORS(app)
 
-# Create the jackson family object
 jackson_family = FamilyStructure("Jackson")
+jackson_family.add_member({
+    "first_name": "John",
+    "age": 33,
+    "lucky_numbers": [7, 13, 22]
+})
+jackson_family.add_member({
+    "first_name": "Jane",
+    "age": 35,
+    "lucky_numbers": [10, 14, 3]
+})
+jackson_family.add_member({
+    "first_name": "Jimmy",
+    "age": 5,
+    "lucky_numbers": [1]
+})
 
 
-# Handle/serialize errors like a JSON object
 @app.errorhandler(APIException)
 def handle_invalid_usage(error):
     return jsonify(error.to_dict()), error.status_code
 
-
 # Generate sitemap with all your endpoints
+
+
 @app.route('/')
 def sitemap():
     return generate_sitemap(app)
 
 
-# 1️⃣ GET all members
-@app.route('/members', methods=['GET'])
+@app.route("/members", methods=["GET"])
 def get_members():
-    members = jackson_family.get_all_members()
-    return jsonify(members), 200
+    try:
+        members = jackson_family.get_all_members()
+        return jsonify(members), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
-# 2️⃣ GET single member by id
-@app.route('/members/<int:member_id>', methods=['GET'])
-def get_single_member(member_id):
-    member = jackson_family.get_member(member_id)
-    if member is None:
-        return jsonify({"error": "Member not found"}), 404
-    return jsonify(member), 200
+@app.route("/member/<int:member_id>", methods=["GET"])
+def get_member(member_id):
+    try:
+        member = jackson_family.get_member(member_id)
+        if member:
+            return jsonify(member), 200
+        else:
+            return jsonify({"error": "Member not found"}), 404
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
-# 3️⃣ POST add new member
-@app.route('/members', methods=['POST'])
-def new_member():
-    data = request.get_json()
-
-    if not data:
-        return jsonify({"error": "Request body is missing"}), 400
-
-    if "first_name" not in data:
-        return jsonify({"error": "first_name is required"}), 400
-
-    if "age" not in data:
-        return jsonify({"error": "age is required"}), 400
-
-    if "lucky_numbers" not in data:
-        return jsonify({"error": "lucky_numbers is required"}), 400
-
-    jackson_family.add_member(data)
-    return jsonify({"message": "Member added successfully"}), 200
+@app.route("/member", methods=["POST"])
+def add_member():
+    try:
+        member_data = request.get_json()
+        if not member_data or "first_name" not in member_data or "age" not in member_data or "lucky_numbers" not in member_data:
+            return jsonify({"error": "Invalid request"}), 400
+        new_member = jackson_family.add_member(member_data)
+        return jsonify({"message": "Member added successfully"}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
-# 4️⃣ DELETE member by id
-@app.route('/members/<int:member_id>', methods=['DELETE'])
+@app.route("/member/<int:member_id>", methods=["DELETE"])
 def delete_member(member_id):
-    deleted = jackson_family.delete_member(member_id)
-    if not deleted:
-        return jsonify({"error": "Member not found"}), 404
-    return jsonify({"message": "Member deleted successfully"}), 200
+    try:
+        result = jackson_family.delete_member(member_id)
+        if result:
+            return jsonify({"message": "Member deleted successfully"}), 200
+        else:
+            return jsonify({"error": "Member not found"}), 404
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 # This only runs if `$ python src/app.py` is executed
